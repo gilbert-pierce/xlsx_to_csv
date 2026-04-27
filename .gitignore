@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Wheels cache
+wheels/
+
+# OS
+.DS_Store
