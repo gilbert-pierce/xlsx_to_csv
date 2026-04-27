@@ -162,15 +162,8 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
         if not xlsx.is_file():
             messagebox.showerror("错误", f"文件不存在：{xlsx}")
             return
-        out_dir = resolved_default_out_dir
-        # Finder/Explorer double-click sometimes yields a non-writable CWD; fall back safely.
-        try:
-            out_dir.mkdir(parents=True, exist_ok=True)
-            probe = out_dir / ".xlsx_to_csv_write_test"
-            probe.write_text("ok", encoding="utf-8")
-            probe.unlink(missing_ok=True)
-        except Exception:
-            out_dir = xlsx.parent.resolve()
+        # Requirement: single file outputs to the input file's directory.
+        out_dir = xlsx.parent.resolve()
         try:
             written = convert_one(xlsx, out_dir)
             info_path = _write_run_info(xlsx=xlsx, out_dir=out_dir, written=written)
@@ -195,14 +188,18 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
             log(f"INFO: no xlsx in {d}")
             return
 
+        out_root = d.parent.resolve() / f"{d.name}__xlsx_to_csv_out"
         try:
-            total_csv, info_files = convert_many(xlsx_files, out_dir=d)
+            out_root.mkdir(parents=True, exist_ok=True)
+            total_csv, info_files = convert_many(xlsx_files, out_dir=out_root)
         except Exception as e:
             messagebox.showerror("转换失败", str(e))
-            log(f"FAILED: folder {d} ({e})")
+            log(f"FAILED: folder {d} -> {out_root} ({e})")
             return
 
-        log(f"OK: folder {d} -> {d} ({len(xlsx_files)} xlsx, {total_csv} CSV)")
+        log(
+            f"OK: folder {d} -> {out_root} ({len(xlsx_files)} xlsx, {total_csv} CSV)"
+        )
         for info in info_files:
             log(f"  info: {info.name}")
 
@@ -225,7 +222,7 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
 
     tk.Label(
         root,
-        text=f"文件模式默认输出目录：{resolved_default_out_dir}（不可写则自动回退到输入文件同目录）",
+        text="输出规则：选文件→输出到文件同目录；选文件夹→在文件夹上一级创建输出文件夹存放结果",
         anchor="w",
     ).pack(fill="x", padx=12)
 

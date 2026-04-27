@@ -48,7 +48,9 @@ dist\xlsx_to_csv_cli.exe --input "C:\path\file.xlsx" --out-dir "C:\path\out"
 
 ### 运行（exe，带交互界面）
 
-- **直接双击** `dist\xlsx_to_csv_gui.exe`：会弹出文件选择框；转换结果默认输出到**输入文件同目录**，并生成一份 `*_conversion_info_*.txt` 记录本次转换信息。
+- **直接双击** `dist\xlsx_to_csv_gui.exe`：打开交互界面，可多轮转换；关闭窗口即可退出。
+  - 选**单一文件**：输出到**输入文件同目录**
+  - 选**文件夹**：在该文件夹的**上一级目录**创建一个 `文件夹名__xlsx_to_csv_out` 目录存放输出
 - **命令行**：仍可用 `--input/--out-dir` 指定路径（适合批处理/自动化）。
 
 也支持文件夹批量：
