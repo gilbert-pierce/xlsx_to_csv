@@ -15,32 +15,33 @@ python xlsx_to_csv.py --input "你的文件.xlsx" --out-dir "./out"
 1) 在“有网”的机器下载 wheels（拷贝到离线机）：
 
 ```bash
-python -m pip download -d wheels pyinstaller pandas openpyxl numpy python-dateutil pytz tzdata six et-xmlfile
+python -m pip download -d wheels pyinstaller openpyxl et-xmlfile
 ```
 
 2) 在 Win10 离线机安装依赖：
 
 ```bat
 py -m venv venv
-venv\Scripts\pip install --no-index --find-links wheels pyinstaller pandas openpyxl
+venv\Scripts\pip install --no-index --find-links wheels pyinstaller openpyxl
 ```
 
 3) 打包：
 
 ```bat
-venv\Scripts\pyinstaller --onefile --name xlsx_to_csv xlsx_to_csv.py
+venv\Scripts\pyinstaller --onefile --name xlsx_to_csv_cli xlsx_to_csv.py
+venv\Scripts\pyinstaller --onefile --noconsole --name xlsx_to_csv_gui xlsx_to_csv.py
 ```
 
-输出：`dist\xlsx_to_csv.exe`
+输出：`dist\xlsx_to_csv_cli.exe`、`dist\xlsx_to_csv_gui.exe`
 
 4) 运行：
 
 ```bat
-dist\xlsx_to_csv.exe --input "C:\path\file.xlsx" --out-dir "C:\path\out"
+dist\xlsx_to_csv_cli.exe --input "C:\path\file.xlsx" --out-dir "C:\path\out"
 ```
 
 ### 运行（exe，带交互界面）
 
-- **直接双击** `dist\xlsx_to_csv.exe`：会弹出文件选择框；转换结果默认输出到**输入文件同目录**，并生成一份 `*_conversion_info_*.txt` 记录本次转换信息。
+- **直接双击** `dist\xlsx_to_csv_gui.exe`：会弹出文件选择框；转换结果默认输出到**输入文件同目录**，并生成一份 `*_conversion_info_*.txt` 记录本次转换信息。
 - **命令行**：仍可用 `--input/--out-dir` 指定路径（适合批处理/自动化）。
 

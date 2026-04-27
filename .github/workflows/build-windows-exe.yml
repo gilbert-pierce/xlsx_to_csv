@@ -28,13 +28,20 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build exe (onefile)
+      - name: Build exe (CLI, onefile)
         shell: bash
         run: |
-          pyinstaller --noconfirm --clean --onefile --name xlsx_to_csv xlsx_to_csv.py
+          pyinstaller --noconfirm --clean --onefile --name xlsx_to_csv_cli xlsx_to_csv.py
+
+      - name: Build exe (GUI, onefile, no console)
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --clean --onefile --noconsole --name xlsx_to_csv_gui xlsx_to_csv.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: xlsx_to_csv-windows-x64
-          path: dist/xlsx_to_csv.exe
+          path: |
+            dist/xlsx_to_csv_cli.exe
+            dist/xlsx_to_csv_gui.exe

@@ -4,7 +4,7 @@ Offline-friendly XLSX -> CSV converter.
 
 - Reads an .xlsx file (all sheets).
 - Exports each sheet to a separate UTF-8 (with BOM) comma-separated CSV.
-- Uses dtype=str to avoid Excel-like coercions (leading zeros / scientific notation).
+- Avoids pandas/numpy to keep the exe lightweight.
 
 Example:
   xlsx_to_csv.exe --input "your.xlsx" --out-dir ".\\out"
@@ -13,17 +13,26 @@ Example:
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
+from openpyxl import load_workbook
 
 
 def _safe_name(name: str) -> str:
     s = str(name or "").strip()
     s = re.sub(r"[^\w\u4e00-\u9fff.-]+", "_", s)
     return (s[:120] if s else "Sheet").strip("_") or "Sheet"
+
+
+def _cell_to_text(v: object) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, str):
+        return v
+    return str(v)
 
 
 def convert_one(xlsx: Path, out_dir: Path) -> list[Path]:
@@ -33,15 +42,30 @@ def convert_one(xlsx: Path, out_dir: Path) -> list[Path]:
         raise SystemExit(f"仅支持 xlsx/xlsm/xltx/xltm: {xlsx}")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    xls = pd.ExcelFile(xlsx)  # uses openpyxl for xlsx
     written: list[Path] = []
     base = _safe_name(xlsx.stem)
-    for sheet in xls.sheet_names:
-        df = pd.read_excel(xls, sheet_name=sheet, dtype=str)
-        df = df.where(df.notna(), "")
-        out = out_dir / f"{base}__{_safe_name(sheet)}.csv"
-        df.to_csv(out, index=False, encoding="utf-8-sig")
-        written.append(out)
+
+    wb = load_workbook(filename=xlsx, read_only=True, data_only=False)
+    try:
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            out = out_dir / f"{base}__{_safe_name(sheet_name)}.csv"
+            with out.open("w", encoding="utf-8-sig", newline="") as f:
+                w = csv.writer(
+                    f,
+                    delimiter=",",
+                    quotechar='"',
+                    quoting=csv.QUOTE_MINIMAL,
+                    lineterminator="\n",
+                )
+                for row in ws.iter_rows(values_only=True):
+                    w.writerow([_cell_to_text(v) for v in row])
+            written.append(out)
+    finally:
+        try:
+            wb.close()
+        except Exception:
+            pass
     return written
 
 
