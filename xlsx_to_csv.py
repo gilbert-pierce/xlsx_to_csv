@@ -88,90 +88,18 @@ def _write_run_info(*, xlsx: Path, out_dir: Path, written: list[Path]) -> Path:
 
 
 def _pick_file_gui() -> Path | None:
-    try:
-        import tkinter as tk
-        from tkinter import filedialog, messagebox
-    except Exception:
-        return None
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        p = filedialog.askopenfilename(
-            title="选择要转换的 XLSX 文件",
-            filetypes=[
-                ("Excel files", "*.xlsx *.xlsm *.xltx *.xltm"),
-                ("All files", "*.*"),
-            ],
-        )
-        if not p:
-            return None
-        xlsx = Path(p).expanduser().resolve()
-        if not xlsx.is_file():
-            messagebox.showerror("错误", f"文件不存在：{xlsx}")
-            return None
-        return xlsx
-    finally:
-        try:
-            root.destroy()
-        except Exception:
-            pass
+    # Legacy: kept for backward-compat (unused by the new GUI window)
+    return None
 
 
 def _pick_dir_gui() -> Path | None:
-    try:
-        import tkinter as tk
-        from tkinter import filedialog, messagebox
-    except Exception:
-        return None
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        p = filedialog.askdirectory(title="选择包含 XLSX 的文件夹")
-        if not p:
-            return None
-        d = Path(p).expanduser().resolve()
-        if not d.is_dir():
-            messagebox.showerror("错误", f"文件夹不存在：{d}")
-            return None
-        return d
-    finally:
-        try:
-            root.destroy()
-        except Exception:
-            pass
+    # Legacy: kept for backward-compat (unused by the new GUI window)
+    return None
 
 
 def _pick_file_or_dir_gui() -> tuple[Path | None, Path | None]:
-    """
-    Returns (file, dir). Only one of them will be non-None.
-    """
-    try:
-        import tkinter as tk
-        from tkinter import messagebox
-    except Exception:
-        return (None, None)
-
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        choice = messagebox.askyesno(
-            "xlsx_to_csv",
-            "是否转换整个文件夹？\n\n是：选择文件夹（批量转换）\n否：选择单个文件",
-        )
-    finally:
-        try:
-            root.destroy()
-        except Exception:
-            pass
-
-    if choice:
-        return (None, _pick_dir_gui())
-    return (_pick_file_gui(), None)
+    # Legacy: kept for backward-compat (unused by the new GUI window)
+    return (None, None)
 
 
 def _iter_xlsx_in_dir(d: Path, *, recursive: bool) -> list[Path]:
@@ -199,6 +127,111 @@ def convert_many(
     return (total_csv, info_files)
 
 
+def _run_gui_app(*, default_out_dir_file: Path) -> int:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox
+    except Exception:
+        raise SystemExit("GUI 依赖 tkinter，但当前环境不可用。请改用命令行参数运行。")
+
+    root = tk.Tk()
+    root.title("xlsx_to_csv")
+    root.geometry("560x320")
+
+    status = tk.StringVar(value="准备就绪。")
+
+    def log(msg: str) -> None:
+        status.set(msg)
+        txt.configure(state="normal")
+        txt.insert("end", msg + "\n")
+        txt.see("end")
+        txt.configure(state="disabled")
+
+    def convert_file() -> None:
+        p = filedialog.askopenfilename(
+            title="选择要转换的 XLSX 文件",
+            filetypes=[
+                ("Excel files", "*.xlsx *.xlsm *.xltx *.xltm"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not p:
+            return
+        xlsx = Path(p).expanduser().resolve()
+        if not xlsx.is_file():
+            messagebox.showerror("错误", f"文件不存在：{xlsx}")
+            return
+        out_dir = default_out_dir_file.resolve()
+        try:
+            written = convert_one(xlsx, out_dir)
+            info_path = _write_run_info(xlsx=xlsx, out_dir=out_dir, written=written)
+        except Exception as e:
+            messagebox.showerror("转换失败", str(e))
+            log(f"FAILED: {xlsx.name} -> {out_dir} ({e})")
+            return
+        log(f"OK: {xlsx.name} -> {out_dir} ({len(written)} CSV), info={info_path.name}")
+
+    def convert_folder() -> None:
+        p = filedialog.askdirectory(title="选择包含 XLSX 的文件夹")
+        if not p:
+            return
+        d = Path(p).expanduser().resolve()
+        if not d.is_dir():
+            messagebox.showerror("错误", f"文件夹不存在：{d}")
+            return
+
+        xlsx_files = _iter_xlsx_in_dir(d, recursive=False)
+        if not xlsx_files:
+            messagebox.showinfo("未找到文件", f"该文件夹内未找到 xlsx：{d}")
+            log(f"INFO: no xlsx in {d}")
+            return
+
+        try:
+            total_csv, info_files = convert_many(xlsx_files, out_dir=d)
+        except Exception as e:
+            messagebox.showerror("转换失败", str(e))
+            log(f"FAILED: folder {d} ({e})")
+            return
+
+        log(f"OK: folder {d} -> {d} ({len(xlsx_files)} xlsx, {total_csv} CSV)")
+        for info in info_files:
+            log(f"  info: {info.name}")
+
+    frm = tk.Frame(root)
+    frm.pack(fill="x", padx=12, pady=12)
+
+    tk.Label(frm, text="选择转换方式（可多次转换，关闭窗口即可退出）").pack(anchor="w")
+
+    btns = tk.Frame(frm)
+    btns.pack(fill="x", pady=(10, 0))
+    tk.Button(btns, text="选择文件并转换", command=convert_file, width=18).pack(
+        side="left"
+    )
+    tk.Button(btns, text="选择文件夹并转换", command=convert_folder, width=18).pack(
+        side="left", padx=(10, 0)
+    )
+    tk.Button(btns, text="关闭", command=root.destroy, width=10).pack(
+        side="right"
+    )
+
+    tk.Label(
+        root,
+        text=f"文件模式默认输出目录：{default_out_dir_file.resolve()}",
+        anchor="w",
+    ).pack(fill="x", padx=12)
+
+    txt = tk.Text(root, height=10, wrap="word")
+    txt.pack(fill="both", expand=True, padx=12, pady=(8, 0))
+    txt.configure(state="disabled")
+
+    bar = tk.Label(root, textvariable=status, anchor="w")
+    bar.pack(fill="x", padx=12, pady=8)
+
+    log("准备就绪。")
+    root.mainloop()
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="XLSX -> UTF-8 comma CSV (per sheet)")
     ap.add_argument("--input", required=False, help="Path to .xlsx file")
@@ -221,6 +254,7 @@ def main() -> int:
     args = ap.parse_args()
 
     out_dir: Path | None = Path(args.out_dir).expanduser().resolve() if args.out_dir else None
+    default_out_dir_file = out_dir if out_dir is not None else Path.cwd().resolve()
 
     # CLI: single file
     if args.input and not args.gui:
@@ -250,36 +284,8 @@ def main() -> int:
             print(f"info: {p}")
         return 0
 
-    # GUI path
-    xlsx_gui: Path | None
-    dir_gui: Path | None
-    xlsx_gui, dir_gui = _pick_file_or_dir_gui()
-    if xlsx_gui is None and dir_gui is None:
-        raise SystemExit(
-            "未选择输入。命令行示例：xlsx_to_csv_gui.exe --input your.xlsx 或 --input-dir your_folder"
-        )
-
-    if xlsx_gui is not None:
-        target_dir = out_dir if out_dir is not None else xlsx_gui.parent.resolve()
-        paths = convert_one(xlsx_gui, target_dir)
-        info_path = _write_run_info(xlsx=xlsx_gui, out_dir=target_dir, written=paths)
-        print(f"OK: wrote {len(paths)} CSV file(s) to {target_dir}")
-        for p in paths:
-            print(f" - {p.name}")
-        print(f"info: {info_path.name}")
-        return 0
-
-    assert dir_gui is not None
-    xlsx_files = _iter_xlsx_in_dir(dir_gui, recursive=True)
-    if not xlsx_files:
-        raise SystemExit(f"文件夹内未找到 xlsx: {dir_gui}")
-    total_csv, info_files = convert_many(xlsx_files, out_dir=out_dir)
-    print(f"OK: converted {len(xlsx_files)} xlsx file(s), wrote {total_csv} CSV file(s)")
-    if out_dir is not None:
-        print(f"output_dir: {out_dir}")
-    for p in info_files:
-        print(f"info: {p}")
-    return 0
+    # GUI: always open an interactive window, allow multiple rounds
+    return _run_gui_app(default_out_dir_file=default_out_dir_file)
 
 
 if __name__ == "__main__":
