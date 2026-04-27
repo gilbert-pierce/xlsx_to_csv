@@ -119,44 +119,166 @@ def _pick_file_gui() -> Path | None:
             pass
 
 
+def _pick_dir_gui() -> Path | None:
+    try:
+        import tkinter as tk
+        from tkinter import filedialog, messagebox
+    except Exception:
+        return None
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        p = filedialog.askdirectory(title="选择包含 XLSX 的文件夹")
+        if not p:
+            return None
+        d = Path(p).expanduser().resolve()
+        if not d.is_dir():
+            messagebox.showerror("错误", f"文件夹不存在：{d}")
+            return None
+        return d
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+
+def _pick_file_or_dir_gui() -> tuple[Path | None, Path | None]:
+    """
+    Returns (file, dir). Only one of them will be non-None.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+    except Exception:
+        return (None, None)
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        choice = messagebox.askyesno(
+            "xlsx_to_csv",
+            "是否转换整个文件夹？\n\n是：选择文件夹（批量转换）\n否：选择单个文件",
+        )
+    finally:
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+    if choice:
+        return (None, _pick_dir_gui())
+    return (_pick_file_gui(), None)
+
+
+def _iter_xlsx_in_dir(d: Path, *, recursive: bool) -> list[Path]:
+    exts = {".xlsx", ".xlsm", ".xltx", ".xltm"}
+    it = d.rglob("*") if recursive else d.iterdir()
+    out: list[Path] = []
+    for p in it:
+        if p.is_file() and p.suffix.lower() in exts and not p.name.startswith("~$"):
+            out.append(p)
+    return sorted(out)
+
+
+def convert_many(
+    xlsx_files: list[Path],
+    *,
+    out_dir: Path | None,
+) -> tuple[int, list[Path]]:
+    total_csv = 0
+    info_files: list[Path] = []
+    for x in xlsx_files:
+        target_dir = out_dir if out_dir is not None else x.parent.resolve()
+        written = convert_one(x, target_dir)
+        info_files.append(_write_run_info(xlsx=x, out_dir=target_dir, written=written))
+        total_csv += len(written)
+    return (total_csv, info_files)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="XLSX -> UTF-8 comma CSV (per sheet)")
     ap.add_argument("--input", required=False, help="Path to .xlsx file")
+    ap.add_argument("--input-dir", required=False, help="Convert all xlsx files in a folder")
+    ap.add_argument(
+        "--recursive",
+        action="store_true",
+        help="When using --input-dir, also scan subfolders",
+    )
     ap.add_argument(
         "--out-dir",
         required=False,
-        help="Output directory for CSV files (default: same directory as input file)",
+        help="Output directory for CSV files (default: same directory as each input file)",
     )
     ap.add_argument(
         "--gui",
         action="store_true",
-        help="Force GUI file picker when available",
+        help="Use GUI picker when available",
     )
     args = ap.parse_args()
 
-    xlsx: Path | None = None
+    out_dir: Path | None = Path(args.out_dir).expanduser().resolve() if args.out_dir else None
+
+    # CLI: single file
     if args.input and not args.gui:
         xlsx = Path(args.input).expanduser().resolve()
-    else:
-        xlsx = _pick_file_gui()
+        target_dir = out_dir if out_dir is not None else xlsx.parent.resolve()
+        paths = convert_one(xlsx, target_dir)
+        info_path = _write_run_info(xlsx=xlsx, out_dir=target_dir, written=paths)
+        print(f"OK: wrote {len(paths)} CSV file(s) to {target_dir}")
+        for p in paths:
+            print(f" - {p.name}")
+        print(f"info: {info_path.name}")
+        return 0
 
-    if xlsx is None:
+    # CLI: folder
+    if args.input_dir and not args.gui:
+        d = Path(args.input_dir).expanduser().resolve()
+        if not d.is_dir():
+            raise SystemExit(f"输入文件夹不存在: {d}")
+        xlsx_files = _iter_xlsx_in_dir(d, recursive=bool(args.recursive))
+        if not xlsx_files:
+            raise SystemExit(f"文件夹内未找到 xlsx: {d}")
+        total_csv, info_files = convert_many(xlsx_files, out_dir=out_dir)
+        print(f"OK: converted {len(xlsx_files)} xlsx file(s), wrote {total_csv} CSV file(s)")
+        if out_dir is not None:
+            print(f"output_dir: {out_dir}")
+        for p in info_files:
+            print(f"info: {p}")
+        return 0
+
+    # GUI path
+    xlsx_gui: Path | None
+    dir_gui: Path | None
+    xlsx_gui, dir_gui = _pick_file_or_dir_gui()
+    if xlsx_gui is None and dir_gui is None:
         raise SystemExit(
-            "未选择输入文件。命令行用法示例：xlsx_to_csv.exe --input your.xlsx --out-dir .\\out"
+            "未选择输入。命令行示例：xlsx_to_csv_gui.exe --input your.xlsx 或 --input-dir your_folder"
         )
 
-    out_dir = (
-        Path(args.out_dir).expanduser().resolve()
-        if args.out_dir
-        else xlsx.parent.resolve()
-    )
-    paths = convert_one(xlsx, out_dir)
-    info_path = _write_run_info(xlsx=xlsx, out_dir=out_dir, written=paths)
+    if xlsx_gui is not None:
+        target_dir = out_dir if out_dir is not None else xlsx_gui.parent.resolve()
+        paths = convert_one(xlsx_gui, target_dir)
+        info_path = _write_run_info(xlsx=xlsx_gui, out_dir=target_dir, written=paths)
+        print(f"OK: wrote {len(paths)} CSV file(s) to {target_dir}")
+        for p in paths:
+            print(f" - {p.name}")
+        print(f"info: {info_path.name}")
+        return 0
 
-    print(f"OK: wrote {len(paths)} CSV file(s) to {out_dir}")
-    for p in paths:
-        print(f" - {p.name}")
-    print(f"info: {info_path.name}")
+    assert dir_gui is not None
+    xlsx_files = _iter_xlsx_in_dir(dir_gui, recursive=True)
+    if not xlsx_files:
+        raise SystemExit(f"文件夹内未找到 xlsx: {dir_gui}")
+    total_csv, info_files = convert_many(xlsx_files, out_dir=out_dir)
+    print(f"OK: converted {len(xlsx_files)} xlsx file(s), wrote {total_csv} CSV file(s)")
+    if out_dir is not None:
+        print(f"output_dir: {out_dir}")
+    for p in info_files:
+        print(f"info: {p}")
     return 0
 
 

@@ -8,6 +8,12 @@
 python xlsx_to_csv.py --input "你的文件.xlsx" --out-dir "./out"
 ```
 
+也支持对文件夹内所有 xlsx 批量转换（可选递归）：
+
+```bash
+python xlsx_to_csv.py --input-dir "./excels" --recursive
+```
+
 ### 打包 Win10 x64 离线 exe（PyInstaller）
 
 > 结论：请在 **Windows 10 x64** 环境打包（避免跨平台二进制依赖问题）。
@@ -44,4 +50,10 @@ dist\xlsx_to_csv_cli.exe --input "C:\path\file.xlsx" --out-dir "C:\path\out"
 
 - **直接双击** `dist\xlsx_to_csv_gui.exe`：会弹出文件选择框；转换结果默认输出到**输入文件同目录**，并生成一份 `*_conversion_info_*.txt` 记录本次转换信息。
 - **命令行**：仍可用 `--input/--out-dir` 指定路径（适合批处理/自动化）。
+
+也支持文件夹批量：
+
+```bat
+dist\xlsx_to_csv_cli.exe --input-dir "C:\path\excels" --recursive
+```
 
