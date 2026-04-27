@@ -139,6 +139,7 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
     root.geometry("560x320")
 
     status = tk.StringVar(value="准备就绪。")
+    resolved_default_out_dir = default_out_dir_file.resolve()
 
     def log(msg: str) -> None:
         status.set(msg)
@@ -161,7 +162,15 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
         if not xlsx.is_file():
             messagebox.showerror("错误", f"文件不存在：{xlsx}")
             return
-        out_dir = default_out_dir_file.resolve()
+        out_dir = resolved_default_out_dir
+        # Finder/Explorer double-click sometimes yields a non-writable CWD; fall back safely.
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            probe = out_dir / ".xlsx_to_csv_write_test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+        except Exception:
+            out_dir = xlsx.parent.resolve()
         try:
             written = convert_one(xlsx, out_dir)
             info_path = _write_run_info(xlsx=xlsx, out_dir=out_dir, written=written)
@@ -216,7 +225,7 @@ def _run_gui_app(*, default_out_dir_file: Path) -> int:
 
     tk.Label(
         root,
-        text=f"文件模式默认输出目录：{default_out_dir_file.resolve()}",
+        text=f"文件模式默认输出目录：{resolved_default_out_dir}（不可写则自动回退到输入文件同目录）",
         anchor="w",
     ).pack(fill="x", padx=12)
 
